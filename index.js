@@ -4,9 +4,9 @@ dotenv.config({ path: path.resolve("./config/.env") });
 import express from "express";
 import initApp from "./src/index.router.js";
 const app = express();
-// import cors from "cors";
+import cors from "cors";
 
-// app.use(cors());
+app.use(cors());
 
 // var whitelist = ["http://example1.com", "http://example2.com"];
 
