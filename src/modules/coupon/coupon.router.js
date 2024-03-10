@@ -1,8 +1,8 @@
 import { Router } from "express";
 import { fileValidation, uploadFile } from "../../utils/multer.js";
-import couponEndPoints from "./coupon.endPoint.js";
-import auth from "../../middleware/auth.js";
 import validation from "../../middleware/validation.js";
+import auth from "../../middleware/auth.js";
+import couponEndPoints from "./coupon.endPoint.js";
 import * as couponController from "./controller/coupon.controller.js";
 import * as couponValidation from "./coupon.validation.js";
 

@@ -1,9 +1,10 @@
 import { Router } from "express";
-import * as orderController from "./controller/order.controller.js";
-import * as orderValidation from "./order.validation.js";
-import orderEndPoint from "./order.endPoint.js";
+// import { fileValidation, uploadFile } from "../../utils/multer.js";
 import validation from "../../middleware/validation.js";
 import auth from "../../middleware/auth.js";
+import orderEndPoint from "./order.endPoint.js";
+import * as orderController from "./controller/order.controller.js";
+import * as orderValidation from "./order.validation.js";
 
 const router = Router();
 
@@ -13,6 +14,7 @@ router
     validation(orderValidation.tokenSchema, true),
     validation(orderValidation.createOrderSchema),
     auth(orderEndPoint.create),
+    // uploadFile(fileValidation.pdf).single("file"),
     orderController.createOrder
   )
   .patch(

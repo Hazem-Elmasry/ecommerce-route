@@ -28,5 +28,6 @@ export const createOrderSchema = joi
         })
         .required()
     ),
+    file: generalFields.file,
   })
   .required();

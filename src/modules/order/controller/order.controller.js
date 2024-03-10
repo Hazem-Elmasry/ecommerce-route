@@ -1,9 +1,13 @@
-import cartModel from "../../../../DB/model/Cart.model.js";
-import couponModel from "../../../../DB/model/Coupon.model.js";
-import orderModel from "../../../../DB/model/Order.model.js";
 import productModel from "../../../../DB/model/Product.model.js";
-import { ApiFeatures } from "../../../utils/apiFeatures.js";
+import couponModel from "../../../../DB/model/Coupon.model.js";
+import cartModel from "../../../../DB/model/Cart.model.js";
+import orderModel from "../../../../DB/model/Order.model.js";
+// import cloudinary from "../../../utils/cloudinary.js";
+import createInvoice from "../../../utils/createInvoice.js";
+import sendEmail from "../../../utils/email.js";
+import fs from "fs";
 import { asyncHandler } from "../../../utils/errorHandling.js";
+import { ApiFeatures } from "../../../utils/apiFeatures.js";
 
 //* === create order ===//
 // Two Senarios:=>
@@ -77,16 +81,67 @@ export const createOrder = asyncHandler(async (req, res, next) => {
   }
   req.body.products = allproducts;
   req.body.subPrice = subPrice;
-  req.body.totalPrice = subPrice - (subPrice * coupon.amount || 0) / 100;
+  req.body.totalPrice = subPrice - (subPrice * coupon?.amount || 0) / 100;
   req.body.userId = _id;
+
   const order = await orderModel.create(req.body);
+
   if (couponName) {
     await couponModel.updateOne(
       { _id: coupon._id },
       { $push: { usedBy: _id } }
     );
   }
-  return res.status(201).json({ message: "order created successfully", order });
+
+  const invoice = {
+    shipping: {
+      name: req.user.userName,
+      address: order.address,
+      city: "Cairo",
+      state: "New Cairo",
+      country: "Egypt",
+      postal_code: 11183,
+    },
+    items: order.products,
+    subtotal: subPrice,
+    paid: 0,
+    invoice_nr: order._id,
+    createdAt: order.createdAt,
+  };
+
+  // const invoiceName = `${req.user.userName}_${order._id}`;
+
+  createInvoice(invoice, "invoice.pdf");
+
+  // const { secure_url, public_id } = await cloudinary.uploader.upload(
+  //   `${invoiceName}.pdf`,
+  //   {
+  //     folder: `${process.env.APP_NAME}/invoices/${order._id}`,
+  //   }
+  // );
+
+  // console.log({ secure_url, public_id });
+
+  await sendEmail({
+    to: req.user.email,
+    subject: "Invoice",
+    attachments: [
+      {
+        path: "invoice.pdf",
+        contentType: "application/pdf",
+      },
+    ],
+  });
+
+  // fs.unlinkSync("invoice.pdf");
+  // console.log("ccc");
+
+  return res.status(201).json({
+    message: "order created successfully",
+    order,
+    // secure_url,
+    // public_id,
+  });
 });
 
 //* === get specific order ===//
