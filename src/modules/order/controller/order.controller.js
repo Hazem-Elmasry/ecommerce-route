@@ -2,12 +2,15 @@ import productModel from "../../../../DB/model/Product.model.js";
 import couponModel from "../../../../DB/model/Coupon.model.js";
 import cartModel from "../../../../DB/model/Cart.model.js";
 import orderModel from "../../../../DB/model/Order.model.js";
+// import createInvoice from "../../../utils/createInvoice.js";
+// import sendEmail from "../../../utils/email.js";
 // import cloudinary from "../../../utils/cloudinary.js";
-import createInvoice from "../../../utils/createInvoice.js";
-import sendEmail from "../../../utils/email.js";
-import fs from "fs";
+// import fs from "fs";
+// import path from "path";
+// import { fileURLToPath } from "url";
 import { asyncHandler } from "../../../utils/errorHandling.js";
 import { ApiFeatures } from "../../../utils/apiFeatures.js";
+import payment from "../../../utils/payment.js";
 
 //* === create order ===//
 // Two Senarios:=>
@@ -37,6 +40,7 @@ export const createOrder = asyncHandler(async (req, res, next) => {
 
   if (!products?.length) {
     const cartExist = await cartModel.findOne({ userId: _id });
+
     if (!cartExist?.products?.length && !products) {
       return next(new Error("invalid cart", { cause: 400 }));
     }
@@ -61,8 +65,21 @@ export const createOrder = asyncHandler(async (req, res, next) => {
     allproducts.push(product);
   }
 
+  req.body.products = allproducts;
+  req.body.subPrice = subPrice;
+  req.body.totalPrice = subPrice - (subPrice * coupon?.amount || 0) / 100;
+  req.body.userId = _id;
+  req.body?.paymentTypes == "cash"
+    ? (req.body.status = "placed")
+    : (req.body.status = "waitForPayment");
+
   for (const product of products) {
-    // to remove products ordered from the user cart:
+    //* to decrease the quantity of products ordered from the stock:
+    await productModel.updateOne(
+      { _id: product.productId },
+      { $inc: { stock: -parseInt(product.quantity) } }
+    );
+    //* to remove products ordered from the user cart:
     await cartModel.updateOne(
       { userId: _id },
       {
@@ -73,18 +90,7 @@ export const createOrder = asyncHandler(async (req, res, next) => {
         },
       }
     );
-    // to decrease the quantity of products ordered from the stock:
-    await productModel.updateOne(
-      { _id: product.productId },
-      { $inc: { stock: -parseInt(product.quantity) } }
-    );
   }
-  req.body.products = allproducts;
-  req.body.subPrice = subPrice;
-  req.body.totalPrice = subPrice - (subPrice * coupon?.amount || 0) / 100;
-  req.body.userId = _id;
-
-  const order = await orderModel.create(req.body);
 
   if (couponName) {
     await couponModel.updateOne(
@@ -92,55 +98,83 @@ export const createOrder = asyncHandler(async (req, res, next) => {
       { $push: { usedBy: _id } }
     );
   }
+  console.log("aaa");
+  const order = await orderModel.create(req.body);
 
-  const invoice = {
-    shipping: {
-      name: req.user.userName,
-      address: order.address,
-      city: "Cairo",
-      state: "New Cairo",
-      country: "Egypt",
-      postal_code: 11183,
-    },
-    items: order.products,
-    subtotal: subPrice,
-    paid: 0,
-    invoice_nr: order._id,
-    createdAt: order.createdAt,
-  };
+  //* payment method card (stripe):
+  if (order.paymentTypes == "card") {
+    const session = payment({
+      success_url: `${process.env.SUCCESS_URL_STRIPE}/${order._id}`,
+      cancel_url: `${process.env.CANCEL_URL_STRIPE}/${order._id}`,
+      customer_email: req.user.email,
+      line_items: order.products.map((element) => {
+        return {
+          price_data: {
+            currency: "egp",
+            product_data: {
+              name: element.name,
+            },
+            unit_amount: element.unitPrice,
+          },
+          quantity: element.quantity,
+        };
+      }),
+    });
+    return res
+      .status(201)
+      .json({ message: "online order done", order, session });
+  }
 
-  // const invoiceName = `${req.user.userName}_${order._id}`;
+  // const invoice = {
+  //   shipping: {
+  //     name: req.user.userName,
+  //     address: order.address,
+  //     city: "Cairo",
+  //     state: "New Cairo",
+  //     country: "Egypt",
+  //     postal_code: 11183,
+  //   },
+  //   items: order.products,
+  //   subtotal: subPrice,
+  //   paid: 0,
+  //   invoice_nr: order._id,
+  //   createdAt: order.createdAt,
+  // };
 
-  createInvoice(invoice, "invoice.pdf");
-
-  // const { secure_url, public_id } = await cloudinary.uploader.upload(
-  //   `${invoiceName}.pdf`,
-  //   {
-  //     folder: `${process.env.APP_NAME}/invoices/${order._id}`,
-  //   }
+  // const __dirname = path.dirname(fileURLToPath(import.meta.url));
+  // const pdfPath = path.join(
+  //   __dirname,
+  //   `./../../../tempInvoices/${order._id}.pdf`
   // );
 
-  // console.log({ secure_url, public_id });
+  // createInvoice(invoice, pdfPath);
 
-  await sendEmail({
-    to: req.user.email,
-    subject: "Invoice",
-    attachments: [
-      {
-        path: "invoice.pdf",
-        contentType: "application/pdf",
-      },
-    ],
-  });
+  //! postman "globalErrorMessage": "[object Object]"
+  // const { secure_url, public_id } = await cloudinary.uploader.upload(pdfPath, {
+  //   folder: `${process.env.APP_NAME}/order/invoices`,
+  // });
 
-  // fs.unlinkSync("invoice.pdf");
-  // console.log("ccc");
+  // if (
+  //   !(await sendEmail({
+  //     to: req.user.email,
+  //     subject: "Order Invoice",
+  //     attachments: [
+  //       {
+  //         filename: `${order._id}.pdf`,
+  //         path: pdfPath,
+  //         contentType: "application/pdf",
+  //       },
+  //     ],
+  //   }))
+  // ) {
+  //   return next(new Error("email not sent", { cause: 400 }));
+  // }
+
+  // fs.unlinkSync(pdfPath);
 
   return res.status(201).json({
-    message: "order created successfully",
+    message: "cash order done",
     order,
-    // secure_url,
-    // public_id,
   });
 });
 
@@ -231,6 +265,35 @@ export const deliveredOrder = asyncHandler(async (req, res, next) => {
   );
   return res.status(200).json({ message: "order delivered", deliveredOrder });
 });
+
+//* === create checkout session ===//
+// export const createCheckOutSession = asyncHandler(async (req, res, next) => {
+//   const { id } = req.params;
+//
+//   const order = await orderModel.findById(id);
+//
+//   let session = await stripe.checkout.sessions.create({
+//     line_items: [
+//       {
+//         price_data: {
+//           product_data: {
+//             name: req.user.userName,
+//           },
+//           unit_amount: order.totalPrice * 100,
+//           currency: "egp",
+//         },
+//       },
+//     ],
+//     mode: "payment",
+//     success_url: process.env.SUCCESS_URL_STRIPE,
+//     cancel_url: process.env.CANCEL_URL_STRIPE,
+//     customer_email: req.user.email,
+//     client_reference_id: id,
+//     metadata: req.body.address,
+//   });
+//   res.json({ message: "success", session });
+//   // res.redirect(303, session.url)
+// });
 
 //* === rejected order ===//
 // 1- check if order is exist by orderId.

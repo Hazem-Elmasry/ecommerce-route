@@ -66,7 +66,7 @@ const orderSchema = new Schema(
     },
     paymentTypes: {
       type: String,
-      enum: ["Cash", "CreditCard"],
+      enum: ["cash", "card"],
       default: "Cash",
     },
     status: {
@@ -92,6 +92,6 @@ const orderSchema = new Schema(
   }
 );
 
-// mongoose.model.Order ||
+//mongoose.model.Order ||
 const orderModel = model("Order", orderSchema);
 export default orderModel;
