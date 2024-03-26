@@ -69,7 +69,7 @@ export const createOrder = asyncHandler(async (req, res, next) => {
   req.body.subPrice = subPrice;
   req.body.totalPrice = subPrice - (subPrice * coupon?.amount || 0) / 100;
   req.body.userId = _id;
-  req.body.paymentType === "cash"
+  req.body.paymentType == "cash"
     ? (req.body.status = "placed")
     : (req.body.status = "waitForPayment");
 
@@ -102,27 +102,31 @@ export const createOrder = asyncHandler(async (req, res, next) => {
   const order = await orderModel.create(req.body);
 
   //* payment method card (stripe):
-  if (order.paymentType === "card") {
-    const session = payment({
-      success_url: `${process.env.SUCCESS_URL_STRIPE}/${order._id}`,
-      cancel_url: `${process.env.CANCEL_URL_STRIPE}/${order._id}`,
-      customer_email: req.user.email,
-      line_items: order.products.map((element) => {
-        return {
-          price_data: {
-            currency: "egp",
-            product_data: {
-              name: element.name,
+  if (order.paymentType == "card") {
+    try {
+      const session = payment({
+        success_url: `${process.env.SUCCESS_URL_STRIPE}/${order._id}`,
+        cancel_url: `${process.env.CANCEL_URL_STRIPE}/${order._id}`,
+        customer_email: req.user.email,
+        line_items: order.products.map((element) => {
+          return {
+            price_data: {
+              currency: "egp",
+              product_data: {
+                name: element.name,
+              },
+              unit_amount: element.unitPrice,
             },
-            unit_amount: element.unitPrice,
-          },
-          quantity: element.quantity,
-        };
-      }),
-    });
-    return res
-      .status(201)
-      .json({ message: "online order done", order, session });
+            quantity: element.quantity,
+          };
+        }),
+      });
+      return res
+        .status(201)
+        .json({ message: "online order done", order, session });
+    } catch (error) {
+      return res.json({ message: "error", error, stack: error.stack });
+    }
   }
 
   // const invoice = {
