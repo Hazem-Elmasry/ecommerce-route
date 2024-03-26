@@ -69,7 +69,7 @@ export const createOrder = asyncHandler(async (req, res, next) => {
   req.body.subPrice = subPrice;
   req.body.totalPrice = subPrice - (subPrice * coupon?.amount || 0) / 100;
   req.body.userId = _id;
-  req.body.paymentType == "cash"
+  req.body.paymentType === "cash"
     ? (req.body.status = "placed")
     : (req.body.status = "waitForPayment");
 
@@ -102,7 +102,7 @@ export const createOrder = asyncHandler(async (req, res, next) => {
   const order = await orderModel.create(req.body);
 
   //* payment method card (stripe):
-  if (order.paymentType == "card") {
+  if (order.paymentType === "card") {
     const session = payment({
       success_url: `${process.env.SUCCESS_URL_STRIPE}/${order._id}`,
       cancel_url: `${process.env.CANCEL_URL_STRIPE}/${order._id}`,
