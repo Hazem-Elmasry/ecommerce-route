@@ -143,7 +143,7 @@ export const createOrder = asyncHandler(async (req, res, next) => {
 
   //* payment method card (stripe):
   if (order.paymentType == "card") {
-    const session = await payment({
+    const session =  payment({
       success_url: `${process.env.SUCCESS_URL_STRIPE}/${order._id}`,
       cancel_url: `${process.env.CANCEL_URL_STRIPE}/${order._id}`,
       customer_email: req.user.email,
