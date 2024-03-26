@@ -116,12 +116,12 @@ export const createOrder = asyncHandler(async (req, res, next) => {
     invoice_nr: order._id,
     createdAt: order.createdAt,
   };
-  const __dirname = path.dirname(fileURLToPath(import.meta.url));
-  const pdfPath = path.join(
-    __dirname,
-    `./../../../tempInvoices/${order._id}.pdf`
-  );
-  createInvoice(invoice, pdfPath);
+  // const __dirname = path.dirname(fileURLToPath(import.meta.url));
+  // const pdfPath = path.join(
+  //   __dirname,
+  //   `./../../../tempInvoices/${order._id}.pdf`
+  // );
+  createInvoice(invoice, "invoice.pdf");
 
   if (
     !(await sendEmail({
@@ -129,8 +129,7 @@ export const createOrder = asyncHandler(async (req, res, next) => {
       subject: "Order Invoice",
       attachments: [
         {
-          filename: `${order._id}.pdf`,
-          path: pdfPath,
+          path: "invoice.pdf",
           contentType: "application/pdf",
         },
       ],
@@ -143,7 +142,7 @@ export const createOrder = asyncHandler(async (req, res, next) => {
 
   //* payment method card (stripe):
   if (order.paymentType == "card") {
-    const session =  payment({
+    const session = payment({
       success_url: `${process.env.SUCCESS_URL_STRIPE}/${order._id}`,
       cancel_url: `${process.env.CANCEL_URL_STRIPE}/${order._id}`,
       customer_email: req.user.email,
