@@ -10,8 +10,8 @@ const router = Router();
 router
   .post(
     "/",
-    // validation(orderValidation.tokenSchema, true),
-    // validation(orderValidation.createOrderSchema),
+    validation(orderValidation.tokenSchema, true),
+    validation(orderValidation.createOrderSchema),
     auth(orderEndPoint.create),
     orderController.createOrder
   )

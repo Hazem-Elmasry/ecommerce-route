@@ -18,7 +18,7 @@ export const createOrderSchema = joi
     couponName: joi.string().min(3).max(20).trim(),
     address: joi.string().min(20).max(100).required(),
     phone: joi.array().items(joi.string().required()).required(),
-    paymentTypes: joi.string().valid("cash", "card"),
+    paymentType: joi.string().valid("cash", "card"),
     note: joi.string().min(20),
     products: joi.array().items(
       joi

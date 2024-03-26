@@ -64,10 +64,10 @@ const orderSchema = new Schema(
       required: [true, "totalPrice is required"],
       min: 1,
     },
-    paymentTypes: {
+    paymentType: {
       type: String,
       enum: ["cash", "card"],
-      default: "Cash",
+      default: "cash",
     },
     status: {
       type: String,
