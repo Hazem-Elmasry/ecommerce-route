@@ -7,6 +7,7 @@ async function payment({
   success_url = process.env.SUCCESS_URL_STRIPE,
   cancel_url = process.env.CANCEL_URL_STRIPE,
   discounts = [],
+  metadata = {},
   customer_email,
   line_items = [],
 } = {}) {
@@ -16,6 +17,7 @@ async function payment({
     success_url,
     cancel_url,
     discounts,
+    metadata,
     customer_email,
     line_items,
   });

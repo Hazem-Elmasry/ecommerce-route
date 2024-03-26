@@ -2,12 +2,12 @@ import productModel from "../../../../DB/model/Product.model.js";
 import couponModel from "../../../../DB/model/Coupon.model.js";
 import cartModel from "../../../../DB/model/Cart.model.js";
 import orderModel from "../../../../DB/model/Order.model.js";
-// import createInvoice from "../../../utils/createInvoice.js";
-// import sendEmail from "../../../utils/email.js";
+import createInvoice from "../../../utils/createInvoice.js";
+import sendEmail from "../../../utils/email.js";
 // import cloudinary from "../../../utils/cloudinary.js";
 // import fs from "fs";
-// import path from "path";
-// import { fileURLToPath } from "url";
+import path from "path";
+import { fileURLToPath } from "url";
 import { asyncHandler } from "../../../utils/errorHandling.js";
 import { ApiFeatures } from "../../../utils/apiFeatures.js";
 import payment from "../../../utils/payment.js";
@@ -92,6 +92,8 @@ export const createOrder = asyncHandler(async (req, res, next) => {
     );
   }
 
+  const order = await orderModel.create(req.body);
+
   if (couponName) {
     await couponModel.updateOne(
       { _id: coupon._id },
@@ -99,87 +101,82 @@ export const createOrder = asyncHandler(async (req, res, next) => {
     );
   }
 
-  const order = await orderModel.create(req.body);
+  const invoice = {
+    shipping: {
+      name: req.user.userName,
+      address: order.address,
+      city: "Cairo",
+      state: "New Cairo",
+      country: "Egypt",
+      postal_code: 11183,
+    },
+    items: order.products,
+    subtotal: subPrice,
+    paid: 0,
+    invoice_nr: order._id,
+    createdAt: order.createdAt,
+  };
+  const __dirname = path.dirname(fileURLToPath(import.meta.url));
+  const pdfPath = path.join(
+    __dirname,
+    `./../../../tempInvoices/${order._id}.pdf`
+  );
+  createInvoice(invoice, pdfPath);
+
+  if (
+    !(await sendEmail({
+      to: req.user.email,
+      subject: "Order Invoice",
+      attachments: [
+        {
+          filename: `${order._id}.pdf`,
+          path: pdfPath,
+          contentType: "application/pdf",
+        },
+      ],
+    }))
+  ) {
+    return next(new Error("email not sent", { cause: 400 }));
+  }
+
+  // fs.unlinkSync(pdfPath);
 
   //* payment method card (stripe):
   if (order.paymentType == "card") {
-    try {
-      const session = payment({
-        success_url: `${process.env.SUCCESS_URL_STRIPE}/${order._id}`,
-        cancel_url: `${process.env.CANCEL_URL_STRIPE}/${order._id}`,
-        customer_email: req.user.email,
-        line_items: order.products.map((element) => {
-          return {
-            price_data: {
-              currency: "egp",
-              product_data: {
-                name: element.name,
-              },
-              unit_amount: element.unitPrice,
+    const session = await payment({
+      success_url: `${process.env.SUCCESS_URL_STRIPE}/${order._id}`,
+      cancel_url: `${process.env.CANCEL_URL_STRIPE}/${order._id}`,
+      customer_email: req.user.email,
+      metadata: {
+        orderId: order._id,
+      },
+      line_items: order.products.map((element) => {
+        return {
+          price_data: {
+            currency: "egp",
+            product_data: {
+              name: element.name,
             },
-            quantity: element.quantity,
-          };
-        }),
-      });
-      return res
-        .status(201)
-        .json({ message: "online order done", order, session });
-    } catch (error) {
-      return res.json({ message: "error", error, stack: error.stack });
-    }
+            unit_amount: element.unitPrice,
+          },
+          quantity: element.quantity,
+        };
+      }),
+    });
+    return res
+      .status(201)
+      .json({ message: "online order done", order, session });
   }
-
-  // const invoice = {
-  //   shipping: {
-  //     name: req.user.userName,
-  //     address: order.address,
-  //     city: "Cairo",
-  //     state: "New Cairo",
-  //     country: "Egypt",
-  //     postal_code: 11183,
-  //   },
-  //   items: order.products,
-  //   subtotal: subPrice,
-  //   paid: 0,
-  //   invoice_nr: order._id,
-  //   createdAt: order.createdAt,
-  // };
-
-  // const __dirname = path.dirname(fileURLToPath(import.meta.url));
-  // const pdfPath = path.join(
-  //   __dirname,
-  //   `./../../../tempInvoices/${order._id}.pdf`
-  // );
-
-  // createInvoice(invoice, pdfPath);
-
-  //! postman "globalErrorMessage": "[object Object]"
-  // const { secure_url, public_id } = await cloudinary.uploader.upload(pdfPath, {
-  //   folder: `${process.env.APP_NAME}/order/invoices`,
-  // });
-
-  // if (
-  //   !(await sendEmail({
-  //     to: req.user.email,
-  //     subject: "Order Invoice",
-  //     attachments: [
-  //       {
-  //         filename: `${order._id}.pdf`,
-  //         path: pdfPath,
-  //         contentType: "application/pdf",
-  //       },
-  //     ],
-  //   }))
-  // ) {
-  //   return next(new Error("email not sent", { cause: 400 }));
-  // }
-
-  // fs.unlinkSync(pdfPath);
 
   return res.status(201).json({
     message: "cash order done",
     order,
   });
+
+  //* postman "globalErrorMessage": "[object Object]"
+  // const { secure_url, public_id } = await cloudinary.uploader.upload(pdfPath, {
+  //   folder: `${process.env.APP_NAME}/order/invoices`,
+  // });
 });
 
 //* === get specific order ===//
